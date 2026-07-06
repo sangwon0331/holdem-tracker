@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>홀덤 트래커</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="홀덤 트래커">
+<meta name="theme-color" content="#0d1712">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root {
+    --bg: #0d1712;
+    --card: #16241c;
+    --card2: #1d2f24;
+    --line: #2a4032;
+    --ink: #e8f0ea;
+    --ink-soft: #8fa697;
+    --gold: #d9b34a;
+    --green: #4ade80;
+    --red: #f87171;
+    --felt: #1f5c3d;
+    --nav-h: 64px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'Malgun Gothic', '맑은 고딕', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  }
+  header {
+    background: linear-gradient(160deg, var(--felt), #143d28);
+    padding: calc(16px + env(safe-area-inset-top)) 20px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 5;
+    box-shadow: 0 2px 12px rgba(0,0,0,.4);
+  }
+  header h1 { font-size: clamp(15px, 5vw, 19px); letter-spacing: .5px; white-space: nowrap; }
+  header h1 .spade { color: var(--gold); }
+  header .head-net { text-align: right; }
+  header .head-net .label { font-size: 10px; color: rgba(255,255,255,.6); }
+  header .head-net .val { font-size: 16px; font-weight: 800; }
+
+  main { padding: 16px; max-width: 560px; margin: 0 auto; }
+  .hidden { display: none !important; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  h2.sec { font-size: 13px; color: var(--ink-soft); font-weight: 700; margin: 4px 2px 10px; letter-spacing: .5px; }
+
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .zero { color: var(--ink-soft); }
+
+  /* ---- 기록 목록 ---- */
+  .month-group { margin-bottom: 18px; }
+  .month-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 0 4px 8px;
+  }
+  .month-head .m { font-size: 15px; font-weight: 800; color: var(--gold); }
+  .month-head .net { font-size: 14px; font-weight: 700; }
+  .entry {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+  }
+  .entry:active { background: var(--card2); }
+  .entry .d { text-align: center; min-width: 34px; }
+  .entry .d .dd { font-size: 17px; font-weight: 800; }
+  .entry .d .dw { font-size: 10px; color: var(--ink-soft); }
+  .entry .mid { flex: 1; min-width: 0; }
+  .entry .mid .nm { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry .mid .sub { font-size: 11px; color: var(--ink-soft); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry .amt { text-align: right; }
+  .entry .amt .net { font-size: 15px; font-weight: 800; }
+  .entry .amt .io { font-size: 10px; color: var(--ink-soft); margin-top: 3px; }
+  .empty-note { text-align: center; color: var(--ink-soft); padding: 48px 16px; font-size: 14px; line-height: 1.7; }
+
+  /* ---- 수익 탭 ---- */
+  .chart-card canvas { width: 100%; display: block; }
+  .legend { display: flex; gap: 14px; justify-content: center; margin-top: 10px; font-size: 11px; color: var(--ink-soft); }
+  .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+  .mrow {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 11px 4px; border-bottom: 1px solid var(--line); font-size: 14px;
+  }
+  .mrow:last-child { border-bottom: none; }
+  .mrow .cnt { color: var(--ink-soft); font-size: 12px; margin-left: 8px; }
+  .mrow .v { font-weight: 700; }
+
+  /* ---- 통계 탭 ---- */
+  .stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat-cell {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 6px; text-align: center; min-width: 0;
+  }
+  .stat-cell .v { font-size: clamp(13px, 5.4vw, 19px); font-weight: 800; }
+  .stat-cell .k { font-size: 11px; color: var(--ink-soft); margin-top: 5px; }
+  .stat-cell.wide { grid-column: 1 / -1; }
+  .stat-cell.hero { background: linear-gradient(160deg, var(--felt), #143d28); border-color: transparent; }
+  .stat-cell.hero .v { font-size: clamp(17px, 7vw, 24px); }
+
+  /* ---- 폼 (전체화면 시트) ---- */
+  .sheet {
+    position: fixed; inset: 0; z-index: 20;
+    background: var(--bg);
+    overflow-y: auto;
+    padding: calc(16px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+  }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; max-width: 560px; margin-left: auto; margin-right: auto; }
+  .sheet-head h2 { font-size: 18px; }
+  .sheet-head button { background: none; border: none; color: var(--ink-soft); font-size: 15px; cursor: pointer; font-family: inherit; padding: 6px; }
+  .sheet-body { max-width: 560px; margin: 0 auto; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; font-weight: 700; }
+  .field input, .field textarea {
+    width: 100%; background: var(--card); border: 1.5px solid var(--line);
+    border-radius: 12px; padding: 13px 14px; color: var(--ink);
+    font-size: 16px; font-family: inherit; outline: none;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--gold); }
+  .field textarea { height: 72px; resize: none; }
+  .field .row2 { display: flex; gap: 10px; }
+  .field .row2 > div { flex: 1; }
+  .money-preview { font-size: 12px; color: var(--gold); margin-top: 5px; min-height: 15px; font-weight: 700; }
+  .primary-btn {
+    width: 100%; padding: 15px; border: none; border-radius: 14px;
+    background: linear-gradient(135deg, var(--gold), #b8923a);
+    color: #1a1408; font-size: 16px; font-weight: 800; font-family: inherit;
+    cursor: pointer; margin-top: 6px;
+  }
+  .primary-btn:active { opacity: .85; }
+  .danger-btn {
+    width: 100%; padding: 13px; border: 1.5px solid #6b2b2b; border-radius: 14px;
+    background: transparent; color: var(--red); font-size: 14px; font-weight: 700;
+    font-family: inherit; cursor: pointer; margin-top: 12px;
+  }
+
+  /* ---- 설정 ---- */
+  .set-btn {
+    width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 15px 16px; color: var(--ink); font-size: 14px;
+    font-family: inherit; cursor: pointer; margin-bottom: 10px; font-weight: 600;
+  }
+  .set-btn small { display: block; color: var(--ink-soft); font-weight: 400; margin-top: 4px; font-size: 12px; }
+  .set-btn.danger { color: var(--red); }
+
+  /* ---- 하단 네비 ---- */
+  nav.bottom {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    background: rgba(13, 23, 18, .96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line);
+    display: flex;
+    height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav.bottom button {
+    flex: 1; background: none; border: none; color: var(--ink-soft);
+    font-size: 10px; font-weight: 700; font-family: inherit; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  }
+  nav.bottom button .ico { font-size: 20px; }
+  nav.bottom button.active { color: var(--gold); }
+
+  .fab {
+    position: fixed; right: 18px; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), #b8923a);
+    color: #1a1408; font-size: 28px; border: none; cursor: pointer; z-index: 9;
+    box-shadow: 0 6px 20px rgba(217, 179, 74, .35);
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .fab:active { transform: scale(.94); }
+
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 20px);
+    background: var(--card2); border: 1px solid var(--line); color: var(--ink);
+    padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    z-index: 30; opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="spade">♠</span> 홀덤 트래커</h1>
+  <div class="head-net">
+    <div class="label">총 순수익</div>
+    <div class="val" id="head-net">₩0</div>
+  </div>
+</header>
+
+<main>
+  <!-- 기록 목록 -->
+  <section id="view-list"></section>
+
+  <!-- 수익 -->
+  <section id="view-profit" class="hidden">
+    <h2 class="sec">월별 순수익 · 누적 수익</h2>
+    <div class="card chart-card">
+      <canvas id="chart" height="240"></canvas>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--green)"></span>순수익 (+)</span>
+        <span><span class="dot" style="background:var(--red)"></span>순수익 (−)</span>
+        <span><span class="dot" style="background:var(--gold)"></span>누적</span>
+      </div>
+    </div>
+    <h2 class="sec">월별 상세</h2>
+    <div class="card" id="month-table"></div>
+  </section>
+
+  <!-- 통계 -->
+  <section id="view-stats" class="hidden">
+    <div class="stat-grid" id="stat-grid"></div>
+  </section>
+
+  <!-- 설정 -->
+  <section id="view-settings" class="hidden">
+    <h2 class="sec">데이터</h2>
+    <button class="set-btn" id="btn-export">📤 데이터 내보내기<small>모든 기록을 JSON 파일로 저장 (백업용)</small></button>
+    <button class="set-btn" id="btn-import">📥 데이터 가져오기<small>백업한 JSON 파일에서 복원</small></button>
+    <input type="file" id="import-file" accept=".json,application/json" class="hidden">
+    <button class="set-btn danger" id="btn-clear">🗑 전체 기록 삭제</button>
+    <h2 class="sec" style="margin-top:22px">아이폰 설치 방법</h2>
+    <div class="card" style="font-size:13px; line-height:1.8; color:var(--ink-soft)">
+      사파리에서 이 페이지를 연 뒤<br>
+      <b style="color:var(--ink)">공유 버튼 <span style="color:var(--gold)">⎋</span> → "홈 화면에 추가"</b>를 누르면<br>
+      앱처럼 설치되고 오프라인에서도 작동해요.<br><br>
+      ⚠️ 데이터는 이 기기에만 저장되니, 가끔 <b style="color:var(--ink)">데이터 내보내기</b>로 백업해두세요.
+    </div>
+  </section>
+</main>
+
+<button class="fab" id="fab">+</button>
+
+<nav class="bottom">
+  <button id="tab-list" class="active"><span class="ico">🗂</span>기록</button>
+  <button id="tab-profit"><span class="ico">📈</span>수익</button>
+  <button id="tab-stats"><span class="ico">📊</span>통계</button>
+  <button id="tab-settings"><span class="ico">⚙️</span>설정</button>
+</nav>
+
+<!-- 기록 추가/수정 시트 -->
+<div class="sheet hidden" id="sheet">
+  <div class="sheet-head">
+    <h2 id="sheet-title">토너먼트 기록</h2>
+    <button id="sheet-close">✕ 닫기</button>
+  </div>
+  <div class="sheet-body">
+    <div class="field"><label>날짜</label><input type="date" id="f-date"></div>
+    <div class="field"><label>토너먼트명 *</label><input type="text" id="f-name" placeholder="예: 데일리 프리즈아웃 #12" maxlength="60"></div>
+    <div class="field"><label>장소 / 온라인</label><input type="text" id="f-venue" placeholder="예: 마카오 / GG포커 (선택)" maxlength="40"></div>
+    <div class="field">
+      <label>바이인 총액 (리엔트리 포함) *</label>
+      <input type="number" id="f-buyin" inputmode="numeric" placeholder="예: 100000" min="0">
+      <div class="money-preview" id="pv-buyin"></div>
+    </div>
+    <div class="field">
+      <label>상금 (캐시 못 하면 0)</label>
+      <input type="number" id="f-prize" inputmode="numeric" placeholder="0" min="0">
+      <div class="money-preview" id="pv-prize"></div>
+    </div>
+    <div class="field"><div class="row2">
+      <div><label>순위</label><input type="number" id="f-place" inputmode="numeric" placeholder="예: 3" min="1"></div>
+      <div><label>참가자 수</label><input type="number" id="f-field" inputmode="numeric" placeholder="예: 120" min="1"></div>
+    </div></div>
+    <div class="field"><label>메모</label><textarea id="f-note" maxlength="200" placeholder="핸드 리뷰, 컨디션 등 (선택)"></textarea></div>
+    <button class="primary-btn" id="f-save">저장</button>
+    <button class="danger-btn hidden" id="f-delete">이 기록 삭제</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY = 'holdem.tournaments';
+const $ = (id) => document.getElementById(id);
+const load = () => JSON.parse(localStorage.getItem(KEY) || '[]');
+const store = (a) => localStorage.setItem(KEY, JSON.stringify(a));
+const won = (n) => '₩' + Math.abs(n).toLocaleString('ko-KR');
+const signWon = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + won(n);
+const cls = (n) => n > 0 ? 'pos' : n < 0 ? 'neg' : 'zero';
+const DOW = ['일','월','화','수','목','금','토'];
+
+// 만원 단위 축약 (차트 축용)
+function fmtShort(n) {
+  const a = Math.abs(n), s = n < 0 ? '−' : '';
+  if (a >= 100000000) return s + (a/100000000).toFixed(a % 100000000 ? 1 : 0) + '억';
+  if (a >= 10000) return s + Math.round(a/10000) + '만';
+  return s + a;
+}
+
+let data = load();
+let editId = null;
+
+/* ---------- 탭 ---------- */
+const tabs = { list: 'view-list', profit: 'view-profit', stats: 'view-stats', settings: 'view-settings' };
+let curTab = 'list';
+function showTab(name) {
+  curTab = name;
+  for (const t in tabs) {
+    $('tab-' + t).classList.toggle('active', t === name);
+    $(tabs[t]).classList.toggle('hidden', t !== name);
+  }
+  $('fab').classList.toggle('hidden', name === 'settings');
+  render();
+}
+for (const t in tabs) $('tab-' + t).onclick = () => showTab(t);
+
+/* ---------- 집계 ---------- */
+function monthKey(dateStr) { return dateStr.slice(0, 7); }
+function monthlyAgg() {
+  const m = {};
+  data.forEach(e => {
+    const k = monthKey(e.date);
+    if (!m[k]) m[k] = { buyin: 0, prize: 0, count: 0 };
+    m[k].buyin += e.buyin;
+    m[k].prize += e.prize;
+    m[k].count++;
+  });
+  return m;
+}
+const netOf = (e) => e.prize - e.buyin;
+const totalNet = () => data.reduce((s, e) => s + netOf(e), 0);
+
+/* ---------- 렌더 ---------- */
+function render() {
+  const net = totalNet();
+  const hn = $('head-net');
+  hn.textContent = signWon(net);
+  hn.className = 'val ' + cls(net);
+  if (curTab === 'list') renderList();
+  if (curTab === 'profit') { renderChart(); renderMonthTable(); }
+  if (curTab === 'stats') renderStats();
+}
+
+function renderList() {
+  const v = $('view-list');
+  if (data.length === 0) {
+    v.innerHTML = '<div class="empty-note">아직 기록이 없어요.<br>오른쪽 아래 <b style="color:var(--gold)">+</b> 버튼으로<br>첫 토너먼트를 기록해보세요 ♠</div>';
+    return;
+  }
+  const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const groups = {};
+  sorted.forEach(e => {
+    const k = monthKey(e.date);
+    (groups[k] = groups[k] || []).push(e);
+  });
+  let html = '';
+  Object.keys(groups).sort().reverse().forEach(k => {
+    const [y, mo] = k.split('-');
+    const mnet = groups[k].reduce((s, e) => s + netOf(e), 0);
+    html += `<div class="month-group">
+      <div class="month-head"><span class="m">${y}년 ${+mo}월</span>
+      <span class="net ${cls(mnet)}">${signWon(mnet)}</span></div>`;
+    groups[k].forEach(e => {
+      const d = new Date(e.date + 'T00:00:00');
+      const n = netOf(e);
+      const sub = [e.venue, e.place ? `${e.place}위${e.field ? '/' + e.field + '명' : ''}` : '']
+        .filter(Boolean).join(' · ');
+      html += `<div class="entry" data-id="${e.id}">
+        <div class="d"><div class="dd">${d.getDate()}</div><div class="dw">${DOW[d.getDay()]}</div></div>
+        <div class="mid"><div class="nm">${esc(e.name)}</div><div class="sub">${esc(sub) || '&nbsp;'}</div></div>
+        <div class="amt"><div class="net ${cls(n)}">${signWon(n)}</div>
+        <div class="io">in ${fmtShort(e.buyin)} · out ${fmtShort(e.prize)}</div></div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  v.innerHTML = html;
+  v.querySelectorAll('.entry').forEach(el => {
+    el.onclick = () => openSheet(+el.dataset.id);
+  });
+}
+function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- 차트 ---------- */
+function renderChart() {
+  const cv = $('chart');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth || cv.parentElement.clientWidth - 32;
+  const H = 240;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+  const agg = monthlyAgg();
+  const keys = Object.keys(agg).sort();
+  if (keys.length === 0) {
+    ctx.fillStyle = css('--ink-soft');
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('기록이 쌓이면 차트가 그려져요 📈', W/2, H/2);
+    return;
+  }
+  // 첫 기록 달부터 이번 달까지 연속된 달 생성, 최근 12개월만 표시
+  const months = [];
+  let [y, m] = keys[0].split('-').map(Number);
+  const now = new Date();
+  const endKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const lastKey = keys[keys.length-1] > endKey ? keys[keys.length-1] : endKey;
+  while (true) {
+    const k = `${y}-${String(m).padStart(2,'0')}`;
+    months.push(k);
+    if (k >= lastKey) break;
+    m++; if (m > 12) { m = 1; y++; }
+    if (months.length > 240) break;
+  }
+  // 누적값 계산 (전체 기간), 표시 구간은 최근 12개월
+  let cum = 0;
+  const all = months.map(k => {
+    const net = agg[k] ? agg[k].prize - agg[k].buyin : 0;
+    cum += net;
+    return { k, net, cum };
+  });
+  const view = all.slice(-12);
+
+  const padL = 44, padR = 10, padT = 14, padB = 26;
+  const cw = W - padL - padR, ch = H - padT - padB;
+  const vals = view.flatMap(v => [v.net, v.cum, 0]);
+  let vmin = Math.min(...vals), vmax = Math.max(...vals);
+  if (vmin === vmax) { vmax += 10000; vmin -= 10000; }
+  const pad = (vmax - vmin) * 0.12;
+  vmax += pad; vmin -= pad;
+  const yOf = (v) => padT + ch - (v - vmin) / (vmax - vmin) * ch;
+
+  // 그리드 + Y라벨
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'right';
+  const steps = 4;
+  for (let i = 0; i <= steps; i++) {
+    const v = vmin + (vmax - vmin) * i / steps;
+    const yy = yOf(v);
+    ctx.strokeStyle = css('--line');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.stroke();
+    ctx.fillStyle = css('--ink-soft');
+    ctx.fillText(fmtShort(Math.round(v)), padL - 6, yy + 3);
+  }
+  // 0 기준선
+  if (vmin < 0 && vmax > 0) {
+    ctx.strokeStyle = css('--ink-soft');
+    ctx.beginPath(); ctx.moveTo(padL, yOf(0)); ctx.lineTo(W - padR, yOf(0)); ctx.stroke();
+  }
+
+  // 막대
+  const slot = cw / view.length;
+  const bw = Math.min(30, slot * 0.55);
+  view.forEach((v, i) => {
+    const x = padL + slot * i + slot / 2;
+    const y0 = yOf(0);
+    const y1 = yOf(v.net);
+    ctx.fillStyle = v.net >= 0 ? css('--green') : css('--red');
+    ctx.globalAlpha = .85;
+    const top = Math.min(y0, y1), hgt = Math.max(Math.abs(y0 - y1), 1);
+    ctx.beginPath();
+    ctx.roundRect(x - bw/2, top, bw, hgt, 3);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // X 라벨
+    ctx.fillStyle = css('--ink-soft');
+    ctx.textAlign = 'center';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(+v.k.slice(5) + '월', x, H - 8);
+  });
+
+  // 누적 라인
+  ctx.strokeStyle = css('--gold');
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  view.forEach((v, i) => {
+    const x = padL + slot * i + slot / 2;
+    const y = yOf(v.cum);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  view.forEach((v, i) => {
+    const x = padL + slot * i + slot / 2;
+    ctx.fillStyle = css('--gold');
+    ctx.beginPath(); ctx.arc(x, yOf(v.cum), 3, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+function renderMonthTable() {
+  const agg = monthlyAgg();
+  const keys = Object.keys(agg).sort().reverse();
+  const t = $('month-table');
+  if (keys.length === 0) { t.innerHTML = '<div class="empty-note" style="padding:20px">기록이 없어요</div>'; return; }
+  t.innerHTML = keys.map(k => {
+    const a = agg[k];
+    const net = a.prize - a.buyin;
+    const [y, mo] = k.split('-');
+    return `<div class="mrow"><span>${y}.${mo}<span class="cnt">${a.count}회</span></span>
+      <span class="v ${cls(net)}">${signWon(net)}</span></div>`;
+  }).join('');
+}
+
+/* ---------- 통계 ---------- */
+function renderStats() {
+  const g = $('stat-grid');
+  if (data.length === 0) {
+    g.innerHTML = '<div class="empty-note wide" style="grid-column:1/-1">기록이 쌓이면 통계가 나와요 📊</div>';
+    return;
+  }
+  const buyin = data.reduce((s, e) => s + e.buyin, 0);
+  const prize = data.reduce((s, e) => s + e.prize, 0);
+  const net = prize - buyin;
+  const itm = data.filter(e => e.prize > 0).length;
+  const roi = buyin > 0 ? (net / buyin * 100) : 0;
+  const best = Math.max(...data.map(e => e.prize));
+  const bestE = data.find(e => e.prize === best);
+  const avgBuyin = Math.round(buyin / data.length);
+  g.innerHTML = `
+    <div class="stat-cell hero wide"><div class="v ${cls(net)}">${signWon(net)}</div><div class="k">총 순수익</div></div>
+    <div class="stat-cell"><div class="v ${cls(roi)}">${roi.toFixed(1)}%</div><div class="k">ROI</div></div>
+    <div class="stat-cell"><div class="v">${(itm / data.length * 100).toFixed(0)}%</div><div class="k">ITM률 (${itm}/${data.length})</div></div>
+    <div class="stat-cell"><div class="v">${data.length}회</div><div class="k">총 출전</div></div>
+    <div class="stat-cell"><div class="v">${won(avgBuyin)}</div><div class="k">평균 바이인</div></div>
+    <div class="stat-cell"><div class="v neg">${won(buyin)}</div><div class="k">총 바이인</div></div>
+    <div class="stat-cell"><div class="v pos">${won(prize)}</div><div class="k">총 상금</div></div>
+    <div class="stat-cell wide"><div class="v pos">${won(best)}</div>
+      <div class="k">최고 상금${bestE && best > 0 ? ' · ' + esc(bestE.name) : ''}</div></div>`;
+}
+
+/* ---------- 시트 (추가/수정) ---------- */
+function openSheet(id) {
+  editId = id ?? null;
+  const e = id != null ? data.find(x => x.id === id) : null;
+  $('sheet-title').textContent = e ? '기록 수정' : '토너먼트 기록';
+  $('f-date').value = e ? e.date : new Date().toISOString().slice(0, 10);
+  $('f-name').value = e ? e.name : '';
+  $('f-venue').value = e ? (e.venue || '') : '';
+  $('f-buyin').value = e ? e.buyin : '';
+  $('f-prize').value = e ? e.prize : '';
+  $('f-place').value = e && e.place ? e.place : '';
+  $('f-field').value = e && e.field ? e.field : '';
+  $('f-note').value = e ? (e.note || '') : '';
+  $('f-delete').classList.toggle('hidden', !e);
+  updatePreviews();
+  $('sheet').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+function closeSheet() {
+  $('sheet').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+$('fab').onclick = () => openSheet(null);
+$('sheet-close').onclick = closeSheet;
+
+function updatePreviews() {
+  const b = +$('f-buyin').value || 0;
+  const p = +$('f-prize').value || 0;
+  $('pv-buyin').textContent = b ? won(b) : '';
+  $('pv-prize').textContent = p ? won(p) : '';
+}
+$('f-buyin').addEventListener('input', updatePreviews);
+$('f-prize').addEventListener('input', updatePreviews);
+
+$('f-save').onclick = () => {
+  const name = $('f-name').value.trim();
+  const date = $('f-date').value;
+  const buyin = Math.round(+$('f-buyin').value);
+  if (!date) return toast('날짜를 선택해주세요');
+  if (!name) return toast('토너먼트명을 입력해주세요');
+  if (!(buyin > 0)) return toast('바이인 금액을 입력해주세요');
+  const entry = {
+    id: editId != null ? editId : Date.now(),
+    date, name,
+    venue: $('f-venue').value.trim(),
+    buyin,
+    prize: Math.max(0, Math.round(+$('f-prize').value || 0)),
+    place: +$('f-place').value || null,
+    field: +$('f-field').value || null,
+    note: $('f-note').value.trim()
+  };
+  if (editId != null) {
+    data = data.map(x => x.id === editId ? entry : x);
+    toast('수정했어요');
+  } else {
+    data.push(entry);
+    toast('기록 완료! ♠');
+  }
+  store(data);
+  closeSheet();
+  showTab('list');
+};
+
+$('f-delete').onclick = () => {
+  if (!confirm('이 기록을 삭제할까요?')) return;
+  data = data.filter(x => x.id !== editId);
+  store(data);
+  closeSheet();
+  toast('삭제했어요');
+  render();
+};
+
+/* ---------- 설정 ---------- */
+$('btn-export').onclick = () => {
+  const blob = new Blob([JSON.stringify({ app: 'holdem-tracker', exportedAt: new Date().toISOString(), tournaments: data }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `holdem-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('백업 파일을 저장했어요');
+};
+$('btn-import').onclick = () => $('import-file').click();
+$('import-file').addEventListener('change', (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const j = JSON.parse(r.result);
+      const arr = Array.isArray(j) ? j : j.tournaments;
+      if (!Array.isArray(arr)) throw 0;
+      const valid = arr.filter(e => e && e.date && e.name && typeof e.buyin === 'number');
+      if (!confirm(`${valid.length}개 기록을 불러올까요?\n(현재 기록을 덮어씁니다)`)) return;
+      data = valid;
+      store(data);
+      render();
+      toast(`${valid.length}개 기록을 복원했어요`);
+    } catch { toast('올바른 백업 파일이 아니에요'); }
+    ev.target.value = '';
+  };
+  r.readAsText(f);
+});
+$('btn-clear').onclick = () => {
+  if (!confirm('모든 기록을 삭제할까요? 되돌릴 수 없어요.')) return;
+  data = [];
+  store(data);
+  render();
+  toast('전체 삭제했어요');
+};
+
+/* ---------- 토스트 ---------- */
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ---------- PWA ---------- */
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js');
+}
+
+window.addEventListener('resize', () => { if (curTab === 'profit') renderChart(); });
+render();
+</script>
+</body>
+</html>
