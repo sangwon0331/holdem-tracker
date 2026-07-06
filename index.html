@@ -138,6 +138,18 @@
   .field .row2 { display: flex; gap: 10px; }
   .field .row2 > div { flex: 1; }
   .money-preview { font-size: 12px; color: var(--gold); margin-top: 5px; min-height: 15px; font-weight: 700; }
+  .seg { display: flex; gap: 8px; }
+  .seg button {
+    flex: 1; padding: 11px 0; border-radius: 12px; border: 1.5px solid var(--line);
+    background: var(--card); color: var(--ink-soft); font-family: inherit;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .seg button.on { border-color: var(--gold); color: var(--gold); background: rgba(217, 179, 74, .08); }
+  .daybadge {
+    display: inline-block; font-size: 9px; font-weight: 800; color: var(--gold);
+    border: 1px solid var(--gold); border-radius: 6px; padding: 1px 5px;
+    margin-right: 5px; letter-spacing: .5px; vertical-align: 1px;
+  }
   .primary-btn {
     width: 100%; padding: 15px; border: none; border-radius: 14px;
     background: linear-gradient(135deg, var(--gold), #b8923a);
@@ -268,6 +280,20 @@
     <div class="field"><label>날짜</label><input type="date" id="f-date"></div>
     <div class="field"><label>토너먼트명 *</label><input type="text" id="f-name" placeholder="예: 데일리 프리즈아웃 #12" maxlength="60"></div>
     <div class="field"><label>장소 / 온라인</label><input type="text" id="f-venue" placeholder="예: 마카오 / GG포커 (선택)" maxlength="40"></div>
+    <div class="field"><label>대회 방식</label>
+      <div class="seg" id="f-mode">
+        <button type="button" data-v="0" class="on">싱글데이</button>
+        <button type="button" data-v="1">멀티데이</button>
+      </div>
+    </div>
+    <div class="field hidden" id="day-field"><label>어느 Day까지 진출했나요?</label>
+      <div class="seg" id="f-day">
+        <button type="button" data-v="1" class="on">Day 1</button>
+        <button type="button" data-v="2">Day 2</button>
+        <button type="button" data-v="3">Day 3</button>
+        <button type="button" data-v="4">Day 4+</button>
+      </div>
+    </div>
     <div class="field">
       <label>바이인 총액 (리엔트리 포함) *</label>
       <input type="number" id="f-buyin" inputmode="numeric" placeholder="예: 100000" min="0">
@@ -376,9 +402,12 @@ function renderList() {
       const n = netOf(e);
       const sub = [e.venue, e.place ? `${e.place}위${e.field ? '/' + e.field + '명' : ''}` : '']
         .filter(Boolean).join(' · ');
+      const badge = e.day
+        ? `<span class="daybadge">${e.day >= 2 ? 'DAY ' + e.day + (e.day >= 4 ? '+' : '') + ' 진출' : '멀티데이'}</span>`
+        : '';
       html += `<div class="entry" data-id="${e.id}">
         <div class="d"><div class="dd">${d.getDate()}</div><div class="dw">${DOW[d.getDay()]}</div></div>
-        <div class="mid"><div class="nm">${esc(e.name)}</div><div class="sub">${esc(sub) || '&nbsp;'}</div></div>
+        <div class="mid"><div class="nm">${esc(e.name)}</div><div class="sub">${badge}${esc(sub) || (badge ? '' : '&nbsp;')}</div></div>
         <div class="amt"><div class="net ${cls(n)}">${signWon(n)}</div>
         <div class="io">in ${fmtShort(e.buyin)} · out ${fmtShort(e.prize)}</div></div>
       </div>`;
@@ -530,12 +559,17 @@ function renderStats() {
   const best = Math.max(...data.map(e => e.prize));
   const bestE = data.find(e => e.prize === best);
   const avgBuyin = Math.round(buyin / data.length);
+  const multi = data.filter(e => e.day);
+  const adv = multi.filter(e => e.day >= 2).length;
+  const monthCnt = Object.keys(monthlyAgg()).length;
   g.innerHTML = `
     <div class="stat-cell hero wide"><div class="v ${cls(net)}">${signWon(net)}</div><div class="k">총 순수익</div></div>
     <div class="stat-cell"><div class="v ${cls(roi)}">${roi.toFixed(1)}%</div><div class="k">ROI</div></div>
     <div class="stat-cell"><div class="v">${(itm / data.length * 100).toFixed(0)}%</div><div class="k">ITM률 (${itm}/${data.length})</div></div>
+    <div class="stat-cell"><div class="v">${multi.length ? (adv / multi.length * 100).toFixed(0) + '%' : '—'}</div><div class="k">Day 2+ 진출률${multi.length ? ` (${adv}/${multi.length})` : ''}</div></div>
     <div class="stat-cell"><div class="v">${data.length}회</div><div class="k">총 출전</div></div>
     <div class="stat-cell"><div class="v">${won(avgBuyin)}</div><div class="k">평균 바이인</div></div>
+    <div class="stat-cell"><div class="v ${cls(net)}">${signWon(Math.round(net / monthCnt))}</div><div class="k">월평균 수익</div></div>
     <div class="stat-cell"><div class="v neg">${won(buyin)}</div><div class="k">총 바이인</div></div>
     <div class="stat-cell"><div class="v pos">${won(prize)}</div><div class="k">총 상금</div></div>
     <div class="stat-cell wide"><div class="v pos">${won(best)}</div>
@@ -543,10 +577,25 @@ function renderStats() {
 }
 
 /* ---------- 시트 (추가/수정) ---------- */
+let formMode = 0, formDay = 1;
+function setMode(m) {
+  formMode = m;
+  $('f-mode').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === m));
+  $('day-field').classList.toggle('hidden', m === 0);
+}
+function setDay(d) {
+  formDay = d;
+  $('f-day').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === d));
+}
+$('f-mode').querySelectorAll('button').forEach(b => b.onclick = () => setMode(+b.dataset.v));
+$('f-day').querySelectorAll('button').forEach(b => b.onclick = () => setDay(+b.dataset.v));
+
 function openSheet(id) {
   editId = id ?? null;
   const e = id != null ? data.find(x => x.id === id) : null;
   $('sheet-title').textContent = e ? '기록 수정' : '토너먼트 기록';
+  setMode(e && e.day ? 1 : 0);
+  setDay(e && e.day ? Math.min(e.day, 4) : 1);
   $('f-date').value = e ? e.date : new Date().toISOString().slice(0, 10);
   $('f-name').value = e ? e.name : '';
   $('f-venue').value = e ? (e.venue || '') : '';
@@ -587,6 +636,7 @@ $('f-save').onclick = () => {
     id: editId != null ? editId : Date.now(),
     date, name,
     venue: $('f-venue').value.trim(),
+    day: formMode === 1 ? formDay : null,
     buyin,
     prize: Math.max(0, Math.round(+$('f-prize').value || 0)),
     place: +$('f-place').value || null,
