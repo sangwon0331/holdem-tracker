@@ -91,6 +91,28 @@
   .entry .amt .io { font-size: 10px; color: var(--ink-soft); margin-top: 3px; }
   .empty-note { text-align: center; color: var(--ink-soft); padding: 48px 16px; font-size: 14px; line-height: 1.7; }
 
+  /* ---- 달력 뷰 (기록 탭) ---- */
+  .lcal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .lcal-head h2 { font-size: 16px; color: var(--gold); }
+  .lcal-head button {
+    border: 1px solid var(--line); background: var(--card); border-radius: 10px;
+    width: 34px; height: 34px; font-size: 16px; cursor: pointer; color: var(--ink);
+  }
+  .lcal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .lcal-grid .dow { text-align: center; font-size: 11px; color: var(--ink-soft); padding: 4px 0; font-weight: 700; }
+  .lcal-grid .day {
+    min-height: 44px; padding: 4px 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    border-radius: 10px; font-size: 11px; color: var(--ink-soft);
+    cursor: pointer; border: 2px solid transparent;
+  }
+  .lcal-grid .day.today-cell { border-color: var(--gold); color: var(--gold); font-weight: 800; }
+  .lcal-grid .day.selday { background: var(--card2); }
+  .lcal-grid .day .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .lcal-grid .day .dot.p { background: var(--green); }
+  .lcal-grid .day .dot.m { background: var(--red); }
+  .lcal-grid .day .dot.w { background: #7ec8ff; }
+
   /* ---- 수익 탭 ---- */
   .chart-card canvas { width: 100%; display: block; }
   .legend { display: flex; gap: 14px; justify-content: center; margin-top: 10px; font-size: 11px; color: var(--ink-soft); }
@@ -128,12 +150,25 @@
   .sheet-body { max-width: 560px; margin: 0 auto; }
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 6px; font-weight: 700; }
-  .field input, .field textarea {
+  .field input, .field textarea, .field select {
     width: 100%; background: var(--card); border: 1.5px solid var(--line);
     border-radius: 12px; padding: 13px 14px; color: var(--ink);
     font-size: 16px; font-family: inherit; outline: none;
   }
-  .field input:focus, .field textarea:focus { border-color: var(--gold); }
+  .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--gold); }
+  .adv-toggle {
+    background: none; border: none; color: var(--gold); font-size: 13px;
+    font-weight: 700; font-family: inherit; padding: 2px 2px 14px; cursor: pointer; display: block;
+  }
+  #f-mood button { font-size: 20px; padding: 8px 0; }
+  .pchips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .pchips button {
+    padding: 8px 12px; border-radius: 16px; border: 1.5px solid var(--line);
+    background: var(--card); color: var(--ink); font-size: 12px; font-weight: 700;
+    font-family: inherit; cursor: pointer;
+  }
+  .pchips button .x { color: var(--ink-soft); margin-left: 6px; }
+  .pchips button.addp { color: var(--gold); border-style: dashed; }
   .field textarea { height: 72px; resize: none; }
   .field .row2 { display: flex; gap: 10px; }
   .field .row2 > div { flex: 1; }
@@ -230,7 +265,13 @@
 
 <main>
   <!-- 기록 목록 -->
-  <section id="view-list"></section>
+  <section id="view-list">
+    <div class="chips" id="list-toggle">
+      <button data-m="list" class="on">📋 목록</button>
+      <button data-m="cal">📅 달력</button>
+    </div>
+    <div id="list-body"></div>
+  </section>
 
   <!-- 수익 -->
   <section id="view-profit" class="hidden">
@@ -258,11 +299,16 @@
     <div class="stat-grid" id="stat-grid"></div>
     <h2 class="sec" style="margin-top:18px" id="venue-sec">장소별 수익</h2>
     <div class="card" id="venue-table"></div>
+    <h2 class="sec" style="margin-top:18px">연도별 수익</h2>
+    <div class="card" id="year-table"></div>
+    <h2 class="sec" style="margin-top:18px">컨디션별 수익</h2>
+    <div class="card" id="mood-table"></div>
   </section>
 
   <!-- 설정 -->
   <section id="view-settings" class="hidden">
     <h2 class="sec">데이터</h2>
+    <button class="set-btn" id="btn-csv">📊 CSV 내보내기 (엑셀용)<small>모든 기록을 엑셀에서 열 수 있는 CSV로 저장</small></button>
     <button class="set-btn" id="btn-export">📤 데이터 내보내기<small>모든 기록을 JSON 파일로 저장 (백업용)</small></button>
     <button class="set-btn" id="btn-import">📥 데이터 가져오기<small>백업한 JSON 파일에서 복원</small></button>
     <input type="file" id="import-file" accept=".json,application/json" class="hidden">
@@ -293,6 +339,7 @@
     <button id="sheet-close">✕ 닫기</button>
   </div>
   <div class="sheet-body">
+    <div class="pchips" id="preset-row"></div>
     <div class="field"><label>날짜</label><input type="date" id="f-date"></div>
     <div class="field"><label>토너먼트명 *</label><input type="text" id="f-name" placeholder="예: 데일리 프리즈아웃 #12" maxlength="60"></div>
     <div class="field"><label>장소 / 온라인</label><input type="text" id="f-venue" placeholder="예: 마카오 / GG포커 (선택)" maxlength="40"></div>
@@ -331,7 +378,27 @@
       <div><label>순위</label><input type="number" id="f-place" inputmode="numeric" placeholder="예: 3" min="1"></div>
       <div><label>참가자 수</label><input type="number" id="f-field" inputmode="numeric" placeholder="예: 120" min="1"></div>
     </div></div>
-    <div class="field"><label>메모</label><textarea id="f-note" maxlength="200" placeholder="핸드 리뷰, 컨디션 등 (선택)"></textarea></div>
+    <button type="button" class="adv-toggle" id="adv-toggle">▸ 추가 옵션 (지분 판매 · 경비 · 통화)</button>
+    <div id="adv-fields" class="hidden">
+      <div class="field"><div class="row2">
+        <div><label>지분 판매 %</label><input type="number" id="f-stake" inputmode="numeric" placeholder="0" min="0" max="95"></div>
+        <div><label>경비 (교통·숙박·팁)</label><input type="number" id="f-exp" inputmode="numeric" placeholder="0" min="0"></div>
+      </div></div>
+      <div class="field"><div class="row2">
+        <div><label>통화</label><select id="f-curr"></select></div>
+        <div><label>환율 (1단위 = ₩)</label><input type="number" id="f-rate" inputmode="decimal" step="any" min="0"></div>
+      </div></div>
+    </div>
+    <div class="field"><label>오늘 컨디션 (선택)</label>
+      <div class="seg" id="f-mood">
+        <button type="button" data-v="1">😵</button>
+        <button type="button" data-v="2">😕</button>
+        <button type="button" data-v="3">🙂</button>
+        <button type="button" data-v="4">😃</button>
+        <button type="button" data-v="5">🔥</button>
+      </div>
+    </div>
+    <div class="field"><label>메모</label><textarea id="f-note" maxlength="200" placeholder="핸드 리뷰, 배운 점 등 (선택)"></textarea></div>
     <button class="primary-btn" id="f-save">저장</button>
     <button class="danger-btn hidden" id="f-delete">이 기록 삭제</button>
   </div>
@@ -378,18 +445,36 @@ for (const t in tabs) $('tab-' + t).onclick = () => showTab(t);
 function monthKey(dateStr) { return dateStr.slice(0, 7); }
 const settled = () => data.filter(e => !e.pending);   // 결과 확정된 기록만 (수익 계산 대상)
 const pendingList = () => data.filter(e => e.pending);
+
+// 통화: 심볼 + 기본 환율(₩). 환율은 기록마다 저장돼서 나중에 바뀌어도 과거 기록은 그대로.
+const CURR = {
+  KRW: { s: '₩', r: 1 }, USD: { s: '$', r: 1400 }, JPY: { s: '¥', r: 9.5 },
+  CNY: { s: '¥', r: 195 }, EUR: { s: '€', r: 1500 }, HKD: { s: 'HK$', r: 180 },
+  PHP: { s: '₱', r: 24 }, THB: { s: '฿', r: 39 }, VND: { s: '₫', r: 0.055 }
+};
+const currOf = (e) => CURR[e.curr || 'KRW'] || CURR.KRW;
+const rateOf = (e) => (e.curr && e.curr !== 'KRW') ? (e.rate || currOf(e).r) : 1;
+const shareOf = (e) => 1 - (e.stakePct || 0) / 100;   // 내 지분 비율
+// 모든 집계는 ₩ 기준, 내 지분 기준
+const myBuyin = (e) => Math.round(e.buyin * shareOf(e) * rateOf(e));
+const myPrize = (e) => Math.round(e.prize * shareOf(e) * rateOf(e));
+const expKrw = (e) => Math.round((e.expenses || 0) * rateOf(e));
+const netOf = (e) => myPrize(e) - myBuyin(e) - expKrw(e);
+// 목록 in/out 표시용 (원래 통화)
+const rawAmt = (e, n) => (e.curr && e.curr !== 'KRW') ? currOf(e).s + n.toLocaleString() : fmtShort(n);
+
 function monthlyAgg() {
   const m = {};
   settled().forEach(e => {
     const k = monthKey(e.date);
-    if (!m[k]) m[k] = { buyin: 0, prize: 0, count: 0 };
-    m[k].buyin += e.buyin;
-    m[k].prize += e.prize;
+    if (!m[k]) m[k] = { buyin: 0, prize: 0, exp: 0, count: 0 };
+    m[k].buyin += myBuyin(e);
+    m[k].prize += myPrize(e);
+    m[k].exp += expKrw(e);
     m[k].count++;
   });
   return m;
 }
-const netOf = (e) => e.prize - e.buyin;
 const totalNet = () => settled().reduce((s, e) => s + netOf(e), 0);
 
 /* ---------- 렌더 ---------- */
@@ -405,8 +490,49 @@ function render() {
   if (curTab === 'stats') renderStats();
 }
 
+const MOOD_EMO = { 1: '😵', 2: '😕', 3: '🙂', 4: '😃', 5: '🔥' };
+
+function entryHTML(e) {
+  const d = new Date(e.date + 'T00:00:00');
+  const n = netOf(e);
+  const sub = [e.venue, e.place ? `${e.place}위${e.field ? '/' + e.field + '명' : ''}` : '',
+    e.reentries ? `리엔트리 ${e.reentries}회` : '',
+    e.stakePct ? `지분 ${e.stakePct}% 판매` : '',
+    e.mood ? MOOD_EMO[e.mood] : '']
+    .filter(Boolean).join(' · ');
+  let badge = e.day
+    ? `<span class="daybadge">${e.day >= 2 ? 'DAY ' + e.day + (e.day >= 4 ? '+' : '') + ' 진출' : '멀티데이'}</span>`
+    : '';
+  if (e.pending) badge += '<span class="daybadge pend">결과 대기</span>';
+  const amt = e.pending
+    ? `<div class="net" style="color:#7ec8ff">진행 중</div><div class="io">in ${rawAmt(e, e.buyin)}</div>`
+    : `<div class="net ${cls(n)}">${signWon(n)}</div><div class="io">in ${rawAmt(e, e.buyin)} · out ${rawAmt(e, e.prize)}</div>`;
+  return `<div class="entry" data-id="${e.id}">
+    <div class="d"><div class="dd">${d.getDate()}</div><div class="dw">${DOW[d.getDay()]}</div></div>
+    <div class="mid"><div class="nm">${esc(e.name)}</div><div class="sub">${badge}${esc(sub) || (badge ? '' : '&nbsp;')}</div></div>
+    <div class="amt">${amt}</div>
+  </div>`;
+}
+function wireEntries(root) {
+  root.querySelectorAll('.entry').forEach(el => {
+    el.onclick = () => openSheet(+el.dataset.id);
+  });
+}
+
+let listMode = 'list';
+let lcalDate = new Date();
+let lcalSel = null;
+$('list-toggle').querySelectorAll('button').forEach(b => {
+  b.onclick = () => {
+    listMode = b.dataset.m;
+    $('list-toggle').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    renderList();
+  };
+});
+
 function renderList() {
-  const v = $('view-list');
+  if (listMode === 'cal') return renderListCal();
+  const v = $('list-body');
   if (data.length === 0) {
     v.innerHTML = '<div class="empty-note">아직 기록이 없어요.<br>오른쪽 아래 <b style="color:var(--gold)">+</b> 버튼으로<br>첫 토너먼트를 기록해보세요 ♠</div>';
     return;
@@ -424,31 +550,53 @@ function renderList() {
     html += `<div class="month-group">
       <div class="month-head"><span class="m">${y}년 ${+mo}월</span>
       <span class="net ${cls(mnet)}">${signWon(mnet)}</span></div>`;
-    groups[k].forEach(e => {
-      const d = new Date(e.date + 'T00:00:00');
-      const n = netOf(e);
-      const sub = [e.venue, e.place ? `${e.place}위${e.field ? '/' + e.field + '명' : ''}` : '',
-        e.reentries ? `리엔트리 ${e.reentries}회` : '']
-        .filter(Boolean).join(' · ');
-      let badge = e.day
-        ? `<span class="daybadge">${e.day >= 2 ? 'DAY ' + e.day + (e.day >= 4 ? '+' : '') + ' 진출' : '멀티데이'}</span>`
-        : '';
-      if (e.pending) badge += '<span class="daybadge pend">결과 대기</span>';
-      const amt = e.pending
-        ? `<div class="net" style="color:#7ec8ff">진행 중</div><div class="io">in ${fmtShort(e.buyin)}</div>`
-        : `<div class="net ${cls(n)}">${signWon(n)}</div><div class="io">in ${fmtShort(e.buyin)} · out ${fmtShort(e.prize)}</div>`;
-      html += `<div class="entry" data-id="${e.id}">
-        <div class="d"><div class="dd">${d.getDate()}</div><div class="dw">${DOW[d.getDay()]}</div></div>
-        <div class="mid"><div class="nm">${esc(e.name)}</div><div class="sub">${badge}${esc(sub) || (badge ? '' : '&nbsp;')}</div></div>
-        <div class="amt">${amt}</div>
-      </div>`;
-    });
+    groups[k].forEach(e => { html += entryHTML(e); });
     html += '</div>';
   });
   v.innerHTML = html;
-  v.querySelectorAll('.entry').forEach(el => {
-    el.onclick = () => openSheet(+el.dataset.id);
+  wireEntries(v);
+}
+
+function renderListCal() {
+  const v = $('list-body');
+  const y = lcalDate.getFullYear(), m = lcalDate.getMonth();
+  const byDay = {};
+  data.forEach(e => { (byDay[e.date] = byDay[e.date] || []).push(e); });
+  let html = `<div class="card">
+    <div class="lcal-head">
+      <button id="lcal-prev">‹</button><h2>${y}년 ${m+1}월</h2><button id="lcal-next">›</button>
+    </div>
+    <div class="lcal-grid">`;
+  DOW.forEach(d => html += `<div class="dow">${d}</div>`);
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m+1, 0).getDate();
+  const todayKey = new Date().toISOString().slice(0, 10);
+  for (let i = 0; i < first; i++) html += '<div></div>';
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const es = byDay[key];
+    let dot = '';
+    if (es) {
+      const pend = es.some(e => e.pending);
+      const dnet = es.reduce((s, e) => s + (e.pending ? 0 : netOf(e)), 0);
+      dot = `<span class="dot ${pend ? 'w' : dnet >= 0 ? 'p' : 'm'}"></span>`;
+    }
+    html += `<div class="day${key === todayKey ? ' today-cell' : ''}${key === lcalSel ? ' selday' : ''}" data-k="${key}">
+      <span>${d}</span>${dot || '<span style="height:8px"></span>'}</div>`;
+  }
+  html += '</div></div>';
+  if (lcalSel && byDay[lcalSel]) {
+    html += byDay[lcalSel].map(entryHTML).join('');
+  } else if (lcalSel) {
+    html += '<div class="empty-note" style="padding:16px">이 날엔 기록이 없어요</div>';
+  }
+  v.innerHTML = html;
+  $('lcal-prev').onclick = () => { lcalDate = new Date(y, m-1, 1); renderListCal(); };
+  $('lcal-next').onclick = () => { lcalDate = new Date(y, m+1, 1); renderListCal(); };
+  v.querySelectorAll('.lcal-grid .day').forEach(el => {
+    el.onclick = () => { lcalSel = el.dataset.k; renderListCal(); };
   });
+  wireEntries(v);
 }
 function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -505,7 +653,7 @@ function renderChart() {
   // 누적값 계산 (전체 기간), 표시 구간은 선택한 기간
   let cum = 0;
   const all = months.map(k => {
-    const net = agg[k] ? agg[k].prize - agg[k].buyin : 0;
+    const net = agg[k] ? agg[k].prize - agg[k].buyin - agg[k].exp : 0;
     cum += net;
     return { k, net, cum };
   });
@@ -595,7 +743,7 @@ function renderMonthTable() {
   if (keys.length === 0) { t.innerHTML = '<div class="empty-note" style="padding:20px">이 기간엔 기록이 없어요</div>'; return; }
   t.innerHTML = keys.map(k => {
     const a = agg[k];
-    const net = a.prize - a.buyin;
+    const net = a.prize - a.buyin - a.exp;
     const [y, mo] = k.split('-');
     return `<div class="mrow"><span>${y}.${mo}<span class="cnt">${a.count}회</span></span>
       <span class="v ${cls(net)}">${signWon(net)}</span></div>`;
@@ -608,23 +756,26 @@ function renderStats() {
   const vt = $('venue-table');
   if (data.length === 0) {
     g.innerHTML = '<div class="empty-note" style="grid-column:1/-1">기록이 쌓이면 통계가 나와요 📊</div>';
-    vt.innerHTML = '<div class="empty-note" style="padding:20px">기록이 없어요</div>';
+    vt.innerHTML = $('year-table').innerHTML = $('mood-table').innerHTML =
+      '<div class="empty-note" style="padding:20px">기록이 없어요</div>';
     return;
   }
   const done = settled();
   const pend = pendingList();
   const h = done.length;
-  const buyin = done.reduce((s, e) => s + e.buyin, 0);
-  const prize = done.reduce((s, e) => s + e.prize, 0);
-  const net = prize - buyin;
+  const buyin = done.reduce((s, e) => s + myBuyin(e), 0);
+  const prize = done.reduce((s, e) => s + myPrize(e), 0);
+  const expT = done.reduce((s, e) => s + expKrw(e), 0);
+  const net = prize - buyin - expT;
   const itm = done.filter(e => e.prize > 0).length;
-  const roi = buyin > 0 ? (net / buyin * 100) : 0;
-  const best = h ? Math.max(...done.map(e => e.prize)) : 0;
-  const bestE = done.find(e => e.prize === best);
+  const wins = done.filter(e => e.place === 1).length;
+  const roi = buyin > 0 ? ((prize - buyin) / buyin * 100) : 0;
+  const best = h ? Math.max(...done.map(e => myPrize(e))) : 0;
+  const bestE = done.find(e => myPrize(e) === best);
   const multi = data.filter(e => e.day);
   const adv = multi.filter(e => e.day >= 2).length;
   const monthCnt = Object.keys(monthlyAgg()).length || 1;
-  const pendBuyin = pend.reduce((s, e) => s + e.buyin, 0);
+  const pendBuyin = pend.reduce((s, e) => s + myBuyin(e), 0);
   const pendCell = pend.length
     ? `<div class="stat-cell wide"><div class="v" style="color:#7ec8ff">⏳ ${pend.length}건 · ${won(pendBuyin)}</div>
        <div class="k">결과 대기 중 (수익 계산에서 제외, 대회 끝나면 기록을 열어 상금 입력)</div></div>`
@@ -638,11 +789,49 @@ function renderStats() {
     <div class="stat-cell"><div class="v">${data.length}회</div><div class="k">총 출전${pend.length ? ` (대기 ${pend.length})` : ''}</div></div>
     <div class="stat-cell"><div class="v">${h ? won(Math.round(buyin / h)) : '—'}</div><div class="k">평균 바이인</div></div>
     <div class="stat-cell"><div class="v ${cls(net)}">${signWon(Math.round(net / monthCnt))}</div><div class="k">월평균 수익</div></div>
-    <div class="stat-cell"><div class="v neg">${won(buyin)}</div><div class="k">총 바이인</div></div>
-    <div class="stat-cell"><div class="v pos">${won(prize)}</div><div class="k">총 상금</div></div>
+    <div class="stat-cell"><div class="v">${wins}회</div><div class="k">우승 🏆</div></div>
+    <div class="stat-cell"><div class="v neg">${won(expT)}</div><div class="k">총 경비</div></div>
+    <div class="stat-cell"><div class="v neg">${won(buyin)}</div><div class="k">총 바이인 (내 부담)</div></div>
+    <div class="stat-cell"><div class="v pos">${won(prize)}</div><div class="k">총 상금 (내 몫)</div></div>
     <div class="stat-cell wide"><div class="v pos">${won(best)}</div>
       <div class="k">최고 상금${bestE && best > 0 ? ' · ' + esc(bestE.name) : ''}</div></div>`;
   renderVenues(done, vt);
+  renderYears(done);
+  renderMoods(done);
+}
+
+function renderYears(done) {
+  const m = {};
+  done.forEach(e => {
+    const y = e.date.slice(0, 4);
+    if (!m[y]) m[y] = { net: 0, count: 0 };
+    m[y].net += netOf(e);
+    m[y].count++;
+  });
+  const t = $('year-table');
+  const ys = Object.keys(m).sort().reverse();
+  t.innerHTML = ys.length === 0
+    ? '<div class="empty-note" style="padding:20px">확정된 기록이 없어요</div>'
+    : ys.map(y => `<div class="mrow"><span>${y}년<span class="cnt">${m[y].count}회</span></span>
+        <span class="v ${cls(m[y].net)}">${signWon(m[y].net)}</span></div>`).join('');
+}
+
+function renderMoods(done) {
+  const withMood = done.filter(e => e.mood);
+  const t = $('mood-table');
+  if (withMood.length === 0) {
+    t.innerHTML = '<div class="empty-note" style="padding:20px">기록할 때 컨디션을 체크하면<br>컨디션별 성적이 나와요</div>';
+    return;
+  }
+  let html = '';
+  for (let v = 5; v >= 1; v--) {
+    const es = withMood.filter(e => e.mood === v);
+    if (es.length === 0) continue;
+    const net = es.reduce((s, e) => s + netOf(e), 0);
+    html += `<div class="mrow"><span>${MOOD_EMO[v]}<span class="cnt">${es.length}회</span></span>
+      <span class="v ${cls(net)}">${signWon(net)}</span></div>`;
+  }
+  t.innerHTML = html;
 }
 
 function renderVenues(done, vt) {
@@ -652,7 +841,7 @@ function renderVenues(done, vt) {
     if (!m[v]) m[v] = { net: 0, count: 0, buyin: 0 };
     m[v].net += netOf(e);
     m[v].count++;
-    m[v].buyin += e.buyin;
+    m[v].buyin += myBuyin(e);
   });
   const names = Object.keys(m).sort((a, b) => m[b].net - m[a].net);
   if (names.length === 0) {
@@ -689,6 +878,69 @@ $('f-mode').querySelectorAll('button').forEach(b => b.onclick = () => setMode(+b
 $('f-day').querySelectorAll('button').forEach(b => b.onclick = () => setDay(+b.dataset.v));
 $('f-status').querySelectorAll('button').forEach(b => b.onclick = () => setStatus(+b.dataset.v));
 
+let formMood = 0;
+function setMoodUI() {
+  $('f-mood').querySelectorAll('button').forEach(x => x.classList.toggle('on', +x.dataset.v === formMood));
+}
+$('f-mood').querySelectorAll('button').forEach(b => {
+  b.onclick = () => { const v = +b.dataset.v; formMood = (formMood === v) ? 0 : v; setMoodUI(); };
+});
+
+const ADV_LABEL = ' 추가 옵션 (지분 판매 · 경비 · 통화)';
+function setAdv(open) {
+  $('adv-fields').classList.toggle('hidden', !open);
+  $('adv-toggle').textContent = (open ? '▾' : '▸') + ADV_LABEL;
+}
+$('adv-toggle').onclick = () => setAdv($('adv-fields').classList.contains('hidden'));
+
+$('f-curr').innerHTML = Object.keys(CURR).map(c => `<option value="${c}">${c} (${CURR[c].s})</option>`).join('');
+$('f-curr').onchange = () => { $('f-rate').value = CURR[$('f-curr').value].r; };
+
+/* ---------- 프리셋 ---------- */
+const PKEY = 'holdem.presets';
+const loadPresets = () => JSON.parse(localStorage.getItem(PKEY) || '[]');
+const storePresets = (a) => localStorage.setItem(PKEY, JSON.stringify(a));
+function renderPresetRow() {
+  const ps = loadPresets();
+  const row = $('preset-row');
+  row.innerHTML = ps.map((p, i) =>
+    `<button data-i="${i}">${esc(p.label)}<span class="x" data-x="${i}">✕</span></button>`).join('')
+    + '<button class="addp" id="preset-add">＋ 프리셋 저장</button>';
+  row.querySelectorAll('button[data-i]').forEach(b => {
+    b.onclick = (ev) => {
+      if (ev.target.dataset.x !== undefined) {
+        const p2 = loadPresets(); p2.splice(+ev.target.dataset.x, 1); storePresets(p2);
+        renderPresetRow(); return;
+      }
+      const p = loadPresets()[+b.dataset.i];
+      $('f-name').value = p.name || '';
+      $('f-venue').value = p.venue || '';
+      $('f-buyin').value = p.buyin || '';
+      $('f-curr').value = p.curr || 'KRW';
+      $('f-rate').value = p.rate || CURR[$('f-curr').value].r;
+      if ((p.curr || 'KRW') !== 'KRW') setAdv(true);
+      setMode(p.day ? 1 : 0);
+      updatePreviews();
+      toast('프리셋 적용 ✓');
+    };
+  });
+  $('preset-add').onclick = () => {
+    const name = $('f-name').value.trim();
+    if (!name) return toast('먼저 토너먼트명을 입력해주세요');
+    const p2 = loadPresets();
+    p2.push({
+      label: name.slice(0, 14), name,
+      venue: $('f-venue').value.trim(),
+      buyin: +$('f-buyin').value || '',
+      curr: $('f-curr').value, rate: +$('f-rate').value || null,
+      day: formMode === 1 ? 1 : null
+    });
+    storePresets(p2);
+    renderPresetRow();
+    toast('프리셋 저장 ✓ 다음부터 탭 한 번으로 입력돼요');
+  };
+}
+
 function openSheet(id) {
   editId = id ?? null;
   const e = id != null ? data.find(x => x.id === id) : null;
@@ -697,6 +949,14 @@ function openSheet(id) {
   setDay(e && e.day ? Math.min(e.day, 4) : 1);
   setStatus(e && e.pending ? 1 : 0);
   $('f-reentry').value = e && e.reentries ? e.reentries : '';
+  formMood = e && e.mood ? e.mood : 0;
+  setMoodUI();
+  $('f-stake').value = e && e.stakePct ? e.stakePct : '';
+  $('f-exp').value = e && e.expenses ? e.expenses : '';
+  $('f-curr').value = e && e.curr ? e.curr : 'KRW';
+  $('f-rate').value = e && e.rate ? e.rate : CURR[$('f-curr').value].r;
+  setAdv(!!(e && (e.stakePct || e.expenses || (e.curr && e.curr !== 'KRW'))));
+  renderPresetRow();
   $('f-date').value = e ? e.date : new Date().toISOString().slice(0, 10);
   $('f-name').value = e ? e.name : '';
   $('f-venue').value = e ? (e.venue || '') : '';
@@ -741,6 +1001,11 @@ $('f-save').onclick = () => {
     day: formMode === 1 ? formDay : null,
     pending,
     reentries: Math.max(0, Math.round(+$('f-reentry').value || 0)) || null,
+    stakePct: Math.min(95, Math.max(0, Math.round(+$('f-stake').value || 0))) || null,
+    expenses: Math.max(0, Math.round(+$('f-exp').value || 0)) || null,
+    curr: $('f-curr').value === 'KRW' ? null : $('f-curr').value,
+    rate: $('f-curr').value === 'KRW' ? null : (+$('f-rate').value || CURR[$('f-curr').value].r),
+    mood: formMood || null,
     buyin,
     prize: pending ? 0 : Math.max(0, Math.round(+$('f-prize').value || 0)),
     place: +$('f-place').value || null,
@@ -777,6 +1042,24 @@ $('btn-export').onclick = () => {
   a.click();
   URL.revokeObjectURL(a.href);
   toast('백업 파일을 저장했어요');
+};
+$('btn-csv').onclick = () => {
+  const head = ['날짜','대회명','장소','바이인','리엔트리','상금','순위','참가자','멀티데이Day','결과대기','지분판매%','경비','통화','환율','컨디션','내 순수익(₩)','메모'];
+  const q = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  const rows = [...data].sort((a, b) => a.date.localeCompare(b.date)).map(e => [
+    e.date, e.name, e.venue || '', e.buyin, e.reentries || 0, e.pending ? '' : e.prize,
+    e.place || '', e.field || '', e.day || '', e.pending ? 'Y' : '',
+    e.stakePct || 0, e.expenses || 0, e.curr || 'KRW', rateOf(e),
+    e.mood || '', e.pending ? '' : netOf(e), e.note || ''
+  ].map(q).join(','));
+  const csv = '﻿' + head.map(q).join(',') + '\r\n' + rows.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `holdem-records-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('CSV 파일을 저장했어요');
 };
 $('btn-import').onclick = () => $('import-file').click();
 $('import-file').addEventListener('change', (ev) => {
