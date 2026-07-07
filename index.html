@@ -150,6 +150,14 @@
     border: 1px solid var(--gold); border-radius: 6px; padding: 1px 5px;
     margin-right: 5px; letter-spacing: .5px; vertical-align: 1px;
   }
+  .daybadge.pend { color: #7ec8ff; border-color: #5a9fd4; }
+  .chips { display: flex; gap: 6px; margin: 0 2px 10px; }
+  .chips button {
+    flex: 1; padding: 7px 0; border-radius: 16px; border: 1.5px solid var(--line);
+    background: var(--card); color: var(--ink-soft); font-family: inherit;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .chips button.on { border-color: var(--gold); color: var(--gold); background: rgba(217, 179, 74, .08); }
   .primary-btn {
     width: 100%; padding: 15px; border: none; border-radius: 14px;
     background: linear-gradient(135deg, var(--gold), #b8923a);
@@ -215,7 +223,7 @@
 <header>
   <h1><span class="spade">♠</span> 홀덤 트래커</h1>
   <div class="head-net">
-    <div class="label">총 순수익</div>
+    <div class="label" id="head-label">총 순수익</div>
     <div class="val" id="head-net">₩0</div>
   </div>
 </header>
@@ -227,6 +235,12 @@
   <!-- 수익 -->
   <section id="view-profit" class="hidden">
     <h2 class="sec">월별 순수익 · 누적 수익</h2>
+    <div class="chips" id="range-chips">
+      <button data-r="3m">3개월</button>
+      <button data-r="12m" class="on">12개월</button>
+      <button data-r="ytd">올해</button>
+      <button data-r="all">전체</button>
+    </div>
     <div class="card chart-card">
       <canvas id="chart" height="240"></canvas>
       <div class="legend">
@@ -242,6 +256,8 @@
   <!-- 통계 -->
   <section id="view-stats" class="hidden">
     <div class="stat-grid" id="stat-grid"></div>
+    <h2 class="sec" style="margin-top:18px" id="venue-sec">장소별 수익</h2>
+    <div class="card" id="venue-table"></div>
   </section>
 
   <!-- 설정 -->
@@ -294,17 +310,24 @@
         <button type="button" data-v="4">Day 4+</button>
       </div>
     </div>
+    <div class="field hidden" id="status-field"><label>결과</label>
+      <div class="seg" id="f-status">
+        <button type="button" data-v="0" class="on">결과 확정</button>
+        <button type="button" data-v="1">⏳ 진행 중 (결과 대기)</button>
+      </div>
+    </div>
     <div class="field">
       <label>바이인 총액 (리엔트리 포함) *</label>
       <input type="number" id="f-buyin" inputmode="numeric" placeholder="예: 100000" min="0">
       <div class="money-preview" id="pv-buyin"></div>
     </div>
-    <div class="field">
+    <div class="field" id="prize-field">
       <label>상금 (캐시 못 하면 0)</label>
       <input type="number" id="f-prize" inputmode="numeric" placeholder="0" min="0">
       <div class="money-preview" id="pv-prize"></div>
     </div>
     <div class="field"><div class="row2">
+      <div><label>리엔트리 횟수</label><input type="number" id="f-reentry" inputmode="numeric" placeholder="0" min="0"></div>
       <div><label>순위</label><input type="number" id="f-place" inputmode="numeric" placeholder="예: 3" min="1"></div>
       <div><label>참가자 수</label><input type="number" id="f-field" inputmode="numeric" placeholder="예: 120" min="1"></div>
     </div></div>
@@ -353,9 +376,11 @@ for (const t in tabs) $('tab-' + t).onclick = () => showTab(t);
 
 /* ---------- 집계 ---------- */
 function monthKey(dateStr) { return dateStr.slice(0, 7); }
+const settled = () => data.filter(e => !e.pending);   // 결과 확정된 기록만 (수익 계산 대상)
+const pendingList = () => data.filter(e => e.pending);
 function monthlyAgg() {
   const m = {};
-  data.forEach(e => {
+  settled().forEach(e => {
     const k = monthKey(e.date);
     if (!m[k]) m[k] = { buyin: 0, prize: 0, count: 0 };
     m[k].buyin += e.buyin;
@@ -365,7 +390,7 @@ function monthlyAgg() {
   return m;
 }
 const netOf = (e) => e.prize - e.buyin;
-const totalNet = () => data.reduce((s, e) => s + netOf(e), 0);
+const totalNet = () => settled().reduce((s, e) => s + netOf(e), 0);
 
 /* ---------- 렌더 ---------- */
 function render() {
@@ -373,6 +398,8 @@ function render() {
   const hn = $('head-net');
   hn.textContent = signWon(net);
   hn.className = 'val ' + cls(net);
+  const pn = pendingList().length;
+  $('head-label').textContent = pn ? `총 순수익 · ⏳대기 ${pn}건` : '총 순수익';
   if (curTab === 'list') renderList();
   if (curTab === 'profit') { renderChart(); renderMonthTable(); }
   if (curTab === 'stats') renderStats();
@@ -393,23 +420,27 @@ function renderList() {
   let html = '';
   Object.keys(groups).sort().reverse().forEach(k => {
     const [y, mo] = k.split('-');
-    const mnet = groups[k].reduce((s, e) => s + netOf(e), 0);
+    const mnet = groups[k].reduce((s, e) => s + (e.pending ? 0 : netOf(e)), 0);
     html += `<div class="month-group">
       <div class="month-head"><span class="m">${y}년 ${+mo}월</span>
       <span class="net ${cls(mnet)}">${signWon(mnet)}</span></div>`;
     groups[k].forEach(e => {
       const d = new Date(e.date + 'T00:00:00');
       const n = netOf(e);
-      const sub = [e.venue, e.place ? `${e.place}위${e.field ? '/' + e.field + '명' : ''}` : '']
+      const sub = [e.venue, e.place ? `${e.place}위${e.field ? '/' + e.field + '명' : ''}` : '',
+        e.reentries ? `리엔트리 ${e.reentries}회` : '']
         .filter(Boolean).join(' · ');
-      const badge = e.day
+      let badge = e.day
         ? `<span class="daybadge">${e.day >= 2 ? 'DAY ' + e.day + (e.day >= 4 ? '+' : '') + ' 진출' : '멀티데이'}</span>`
         : '';
+      if (e.pending) badge += '<span class="daybadge pend">결과 대기</span>';
+      const amt = e.pending
+        ? `<div class="net" style="color:#7ec8ff">진행 중</div><div class="io">in ${fmtShort(e.buyin)}</div>`
+        : `<div class="net ${cls(n)}">${signWon(n)}</div><div class="io">in ${fmtShort(e.buyin)} · out ${fmtShort(e.prize)}</div>`;
       html += `<div class="entry" data-id="${e.id}">
         <div class="d"><div class="dd">${d.getDate()}</div><div class="dw">${DOW[d.getDay()]}</div></div>
         <div class="mid"><div class="nm">${esc(e.name)}</div><div class="sub">${badge}${esc(sub) || (badge ? '' : '&nbsp;')}</div></div>
-        <div class="amt"><div class="net ${cls(n)}">${signWon(n)}</div>
-        <div class="io">in ${fmtShort(e.buyin)} · out ${fmtShort(e.prize)}</div></div>
+        <div class="amt">${amt}</div>
       </div>`;
     });
     html += '</div>';
@@ -422,6 +453,22 @@ function renderList() {
 function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ---------- 차트 ---------- */
+let chartRange = '12m';
+$('range-chips').querySelectorAll('button').forEach(b => {
+  b.onclick = () => {
+    chartRange = b.dataset.r;
+    $('range-chips').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    renderChart();
+    renderMonthTable();
+  };
+});
+function rangeCutoff() {
+  const now = new Date();
+  if (chartRange === '3m') return `${new Date(now.getFullYear(), now.getMonth()-2, 1).getFullYear()}-${String(new Date(now.getFullYear(), now.getMonth()-2, 1).getMonth()+1).padStart(2,'0')}`;
+  if (chartRange === '12m') return `${new Date(now.getFullYear(), now.getMonth()-11, 1).getFullYear()}-${String(new Date(now.getFullYear(), now.getMonth()-11, 1).getMonth()+1).padStart(2,'0')}`;
+  if (chartRange === 'ytd') return now.getFullYear() + '-01';
+  return '0000-00';
+}
 function renderChart() {
   const cv = $('chart');
   const dpr = window.devicePixelRatio || 1;
@@ -455,14 +502,19 @@ function renderChart() {
     m++; if (m > 12) { m = 1; y++; }
     if (months.length > 240) break;
   }
-  // 누적값 계산 (전체 기간), 표시 구간은 최근 12개월
+  // 누적값 계산 (전체 기간), 표시 구간은 선택한 기간
   let cum = 0;
   const all = months.map(k => {
     const net = agg[k] ? agg[k].prize - agg[k].buyin : 0;
     cum += net;
     return { k, net, cum };
   });
-  const view = all.slice(-12);
+  let view;
+  if (chartRange === '3m') view = all.slice(-3);
+  else if (chartRange === '12m') view = all.slice(-12);
+  else if (chartRange === 'ytd') view = all.filter(v => v.k >= now.getFullYear() + '-01');
+  else view = all;
+  if (view.length === 0) view = all.slice(-1);
 
   const padL = 44, padR = 10, padT = 14, padB = 26;
   const cw = W - padL - padR, ch = H - padT - padB;
@@ -495,6 +547,8 @@ function renderChart() {
   // 막대
   const slot = cw / view.length;
   const bw = Math.min(30, slot * 0.55);
+  const labelStep = Math.ceil(view.length / 12);
+  const multiYear = view.length > 1 && view[0].k.slice(0, 4) !== view[view.length-1].k.slice(0, 4);
   view.forEach((v, i) => {
     const x = padL + slot * i + slot / 2;
     const y0 = yOf(0);
@@ -506,11 +560,14 @@ function renderChart() {
     ctx.roundRect(x - bw/2, top, bw, hgt, 3);
     ctx.fill();
     ctx.globalAlpha = 1;
-    // X 라벨
-    ctx.fillStyle = css('--ink-soft');
-    ctx.textAlign = 'center';
-    ctx.font = '10px sans-serif';
-    ctx.fillText(+v.k.slice(5) + '월', x, H - 8);
+    // X 라벨 (많으면 건너뛰기)
+    if (i % labelStep === 0) {
+      ctx.fillStyle = css('--ink-soft');
+      ctx.textAlign = 'center';
+      ctx.font = '10px sans-serif';
+      const lb = multiYear ? v.k.slice(2, 4) + '.' + (+v.k.slice(5)) : (+v.k.slice(5)) + '월';
+      ctx.fillText(lb, x, H - 8);
+    }
   });
 
   // 누적 라인
@@ -532,9 +589,10 @@ function renderChart() {
 
 function renderMonthTable() {
   const agg = monthlyAgg();
-  const keys = Object.keys(agg).sort().reverse();
+  const cutoff = rangeCutoff();
+  const keys = Object.keys(agg).filter(k => k >= cutoff).sort().reverse();
   const t = $('month-table');
-  if (keys.length === 0) { t.innerHTML = '<div class="empty-note" style="padding:20px">기록이 없어요</div>'; return; }
+  if (keys.length === 0) { t.innerHTML = '<div class="empty-note" style="padding:20px">이 기간엔 기록이 없어요</div>'; return; }
   t.innerHTML = keys.map(k => {
     const a = agg[k];
     const net = a.prize - a.buyin;
@@ -547,48 +605,89 @@ function renderMonthTable() {
 /* ---------- 통계 ---------- */
 function renderStats() {
   const g = $('stat-grid');
+  const vt = $('venue-table');
   if (data.length === 0) {
-    g.innerHTML = '<div class="empty-note wide" style="grid-column:1/-1">기록이 쌓이면 통계가 나와요 📊</div>';
+    g.innerHTML = '<div class="empty-note" style="grid-column:1/-1">기록이 쌓이면 통계가 나와요 📊</div>';
+    vt.innerHTML = '<div class="empty-note" style="padding:20px">기록이 없어요</div>';
     return;
   }
-  const buyin = data.reduce((s, e) => s + e.buyin, 0);
-  const prize = data.reduce((s, e) => s + e.prize, 0);
+  const done = settled();
+  const pend = pendingList();
+  const h = done.length;
+  const buyin = done.reduce((s, e) => s + e.buyin, 0);
+  const prize = done.reduce((s, e) => s + e.prize, 0);
   const net = prize - buyin;
-  const itm = data.filter(e => e.prize > 0).length;
+  const itm = done.filter(e => e.prize > 0).length;
   const roi = buyin > 0 ? (net / buyin * 100) : 0;
-  const best = Math.max(...data.map(e => e.prize));
-  const bestE = data.find(e => e.prize === best);
-  const avgBuyin = Math.round(buyin / data.length);
+  const best = h ? Math.max(...done.map(e => e.prize)) : 0;
+  const bestE = done.find(e => e.prize === best);
   const multi = data.filter(e => e.day);
   const adv = multi.filter(e => e.day >= 2).length;
-  const monthCnt = Object.keys(monthlyAgg()).length;
+  const monthCnt = Object.keys(monthlyAgg()).length || 1;
+  const pendBuyin = pend.reduce((s, e) => s + e.buyin, 0);
+  const pendCell = pend.length
+    ? `<div class="stat-cell wide"><div class="v" style="color:#7ec8ff">⏳ ${pend.length}건 · ${won(pendBuyin)}</div>
+       <div class="k">결과 대기 중 (수익 계산에서 제외, 대회 끝나면 기록을 열어 상금 입력)</div></div>`
+    : '';
   g.innerHTML = `
     <div class="stat-cell hero wide"><div class="v ${cls(net)}">${signWon(net)}</div><div class="k">총 순수익</div></div>
-    <div class="stat-cell"><div class="v ${cls(roi)}">${roi.toFixed(1)}%</div><div class="k">ROI</div></div>
-    <div class="stat-cell"><div class="v">${(itm / data.length * 100).toFixed(0)}%</div><div class="k">ITM률 (${itm}/${data.length})</div></div>
+    ${pendCell}
+    <div class="stat-cell"><div class="v ${cls(roi)}">${h ? roi.toFixed(1) + '%' : '—'}</div><div class="k">ROI</div></div>
+    <div class="stat-cell"><div class="v">${h ? (itm / h * 100).toFixed(0) + '%' : '—'}</div><div class="k">ITM률${h ? ` (${itm}/${h})` : ''}</div></div>
     <div class="stat-cell"><div class="v">${multi.length ? (adv / multi.length * 100).toFixed(0) + '%' : '—'}</div><div class="k">Day 2+ 진출률${multi.length ? ` (${adv}/${multi.length})` : ''}</div></div>
-    <div class="stat-cell"><div class="v">${data.length}회</div><div class="k">총 출전</div></div>
-    <div class="stat-cell"><div class="v">${won(avgBuyin)}</div><div class="k">평균 바이인</div></div>
+    <div class="stat-cell"><div class="v">${data.length}회</div><div class="k">총 출전${pend.length ? ` (대기 ${pend.length})` : ''}</div></div>
+    <div class="stat-cell"><div class="v">${h ? won(Math.round(buyin / h)) : '—'}</div><div class="k">평균 바이인</div></div>
     <div class="stat-cell"><div class="v ${cls(net)}">${signWon(Math.round(net / monthCnt))}</div><div class="k">월평균 수익</div></div>
     <div class="stat-cell"><div class="v neg">${won(buyin)}</div><div class="k">총 바이인</div></div>
     <div class="stat-cell"><div class="v pos">${won(prize)}</div><div class="k">총 상금</div></div>
     <div class="stat-cell wide"><div class="v pos">${won(best)}</div>
       <div class="k">최고 상금${bestE && best > 0 ? ' · ' + esc(bestE.name) : ''}</div></div>`;
+  renderVenues(done, vt);
+}
+
+function renderVenues(done, vt) {
+  const m = {};
+  done.forEach(e => {
+    const v = (e.venue || '').trim() || '장소 미입력';
+    if (!m[v]) m[v] = { net: 0, count: 0, buyin: 0 };
+    m[v].net += netOf(e);
+    m[v].count++;
+    m[v].buyin += e.buyin;
+  });
+  const names = Object.keys(m).sort((a, b) => m[b].net - m[a].net);
+  if (names.length === 0) {
+    vt.innerHTML = '<div class="empty-note" style="padding:20px">확정된 기록이 없어요</div>';
+    return;
+  }
+  vt.innerHTML = names.map(n => {
+    const a = m[n];
+    const roi = a.buyin > 0 ? ` · ROI ${(a.net / a.buyin * 100).toFixed(0)}%` : '';
+    return `<div class="mrow"><span>${esc(n)}<span class="cnt">${a.count}회${roi}</span></span>
+      <span class="v ${cls(a.net)}">${signWon(a.net)}</span></div>`;
+  }).join('');
 }
 
 /* ---------- 시트 (추가/수정) ---------- */
-let formMode = 0, formDay = 1;
+let formMode = 0, formDay = 1, formStatus = 0;
 function setMode(m) {
   formMode = m;
   $('f-mode').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === m));
   $('day-field').classList.toggle('hidden', m === 0);
+  $('status-field').classList.toggle('hidden', m === 0);
+  if (m === 0) setStatus(0);
 }
 function setDay(d) {
   formDay = d;
   $('f-day').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === d));
 }
+function setStatus(s) {
+  formStatus = s;
+  $('f-status').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === s));
+  $('prize-field').classList.toggle('hidden', s === 1);
+}
 $('f-mode').querySelectorAll('button').forEach(b => b.onclick = () => setMode(+b.dataset.v));
 $('f-day').querySelectorAll('button').forEach(b => b.onclick = () => setDay(+b.dataset.v));
+$('f-status').querySelectorAll('button').forEach(b => b.onclick = () => setStatus(+b.dataset.v));
 
 function openSheet(id) {
   editId = id ?? null;
@@ -596,6 +695,8 @@ function openSheet(id) {
   $('sheet-title').textContent = e ? '기록 수정' : '토너먼트 기록';
   setMode(e && e.day ? 1 : 0);
   setDay(e && e.day ? Math.min(e.day, 4) : 1);
+  setStatus(e && e.pending ? 1 : 0);
+  $('f-reentry').value = e && e.reentries ? e.reentries : '';
   $('f-date').value = e ? e.date : new Date().toISOString().slice(0, 10);
   $('f-name').value = e ? e.name : '';
   $('f-venue').value = e ? (e.venue || '') : '';
@@ -632,13 +733,16 @@ $('f-save').onclick = () => {
   if (!date) return toast('날짜를 선택해주세요');
   if (!name) return toast('토너먼트명을 입력해주세요');
   if (!(buyin > 0)) return toast('바이인 금액을 입력해주세요');
+  const pending = formMode === 1 && formStatus === 1;
   const entry = {
     id: editId != null ? editId : Date.now(),
     date, name,
     venue: $('f-venue').value.trim(),
     day: formMode === 1 ? formDay : null,
+    pending,
+    reentries: Math.max(0, Math.round(+$('f-reentry').value || 0)) || null,
     buyin,
-    prize: Math.max(0, Math.round(+$('f-prize').value || 0)),
+    prize: pending ? 0 : Math.max(0, Math.round(+$('f-prize').value || 0)),
     place: +$('f-place').value || null,
     field: +$('f-field').value || null,
     note: $('f-note').value.trim()
